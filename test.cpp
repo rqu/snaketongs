@@ -369,6 +369,121 @@ TEST("exceptions: py to cpp to py", {
 	ASSERT_EQ((std::string) exc.repr(), "KeyError('nonexistent')");
 });
 
+TEST("with", {
+	using snaketongs::kw;
+	snaketongs::process proc;
+
+	std::stringstream log;
+	std::string log_expect;
+
+	auto MyContextManager = proc.type("MyContextManager", proc.make_tuple(), proc.dict(
+		kw("__init__") = [&](auto self, auto exit_return) {
+			self.set("exit_return", exit_return);
+		},
+		kw("__enter__") = [&](auto self) {
+			log << "enter(" << self << ");";
+			return "enter value";
+		},
+		kw("__exit__") = [&](auto self, auto type, auto exc, auto tb) {
+			log << "exit("
+				<< self << ", "
+				<< (type ? std::string(type.get("__name__")).c_str() : "None") << ", "
+				<< exc.type().get("__name__") << ", "
+				<< tb.type().get("__name__") << ");";
+			return self.get("exit_return");
+		},
+		kw("__str__") = [](auto) {
+			return "MyContextManager()";
+		}
+	));
+
+	////////
+
+	{
+		snaketongs::with value = MyContextManager(false);
+		ASSERT_EQ((std::string) value, "enter value");
+		log << "body;";
+	}
+
+	log_expect = "enter(MyContextManager());body;exit(MyContextManager(), None, NoneType, NoneType);";
+	ASSERT_EQ(log.view(), log_expect);
+	log.str("");
+
+	////////
+
+	{
+		snaketongs::with value = MyContextManager(false);
+		ASSERT_EQ((std::string) value, "enter value");
+		log << "body;";
+		value.exit();
+		log << "after;";
+	}
+
+	log_expect = "enter(MyContextManager());body;exit(MyContextManager(), None, NoneType, NoneType);after;";
+	ASSERT_EQ(log.view(), log_expect);
+	log.str("");
+
+	////////
+
+	try {
+		snaketongs::with value = MyContextManager(false);
+		ASSERT_EQ((std::string) value, "enter value");
+		log << "body;";
+		proc.dict()["nonexistent"];
+		log << "unreachable;";
+	} catch(const snaketongs::object &exc) {
+		log << "catch;";
+	}
+
+	log_expect = "enter(MyContextManager());body;exit(MyContextManager(), UnknownException, UnknownException, NoneType);catch;";
+	ASSERT_EQ(log.view(), log_expect);
+	log.str("");
+
+	////////
+
+	try {
+		snaketongs::with value = MyContextManager(false);
+		try {
+			ASSERT_EQ((std::string) value, "enter value");
+			log << "body;";
+			proc.dict()["nonexistent"];
+			log << "unreachable;";
+		} catch(...) {
+			log << "catch begin;";
+			value.exit();
+			log << "catch end;";
+		}
+	} catch(const snaketongs::object &exc) {
+		log << "outer catch;";
+	}
+
+	log_expect = "enter(MyContextManager());body;catch begin;exit(MyContextManager(), KeyError, KeyError, traceback);outer catch;";
+	ASSERT_EQ(log.view(), log_expect);
+	log.str("");
+
+	////////
+
+	try {
+		snaketongs::with value = MyContextManager(true);
+		try {
+			ASSERT_EQ((std::string) value, "enter value");
+			log << "body;";
+			proc.dict()["nonexistent"];
+			log << "unreachable;";
+		} catch(...) {
+			log << "catch begin;";
+			value.exit();
+			log << "catch end;";
+		}
+	} catch(const snaketongs::object &exc) {
+		log << "outer catch;";
+	}
+
+	log_expect = "enter(MyContextManager());body;catch begin;exit(MyContextManager(), KeyError, KeyError, traceback);catch end;";
+	ASSERT_EQ(log.view(), log_expect);
+	log.str("");
+});
+
 TEST("readme: intro", {
 	// Start a process by creating a `snaketongs::process` object.
 	// (The process will be terminated when it goes out of scope.)
@@ -380,6 +495,7 @@ TEST("readme: intro", {
 	// Imports:
 	auto copy = proc["shutil.copy"]; // from shutil import copy
 	auto re = proc["re.*"]; // import re
+	auto IndexError = proc["builtins.IndexError"]; // for builtins not recognized by snaketongs
 
 	// Builtins are exposed as members of `snaketongs::process`.
 	// Here we use Python's str, range, map, and sorted:
@@ -417,6 +533,19 @@ TEST("readme: intro", {
 	// Iterating Python objects (same as Python for-loop):
 	for(auto TEST_i = 0; auto &elem : squares)
 		TEST_cout() << elem << TEST_endl_expect(std::to_string(TEST_i*TEST_i)), TEST_i++;
+
+	// Simple with-statement (cannot suppress exceptions)
+	// - equivalent to  `with open("README.md") as file:  print(file.readline())`
+	{
+		snaketongs::with file = proc.open("README.md");
+		TEST_cout() << file.call("readline") << TEST_endl_expect("# snaketongs — library for using Python libraries from C++\n");
+	}
+
+	// Full with-statement
+	// - equivalent to  `with contextlib.suppress(IndexError):  letters[42]`
+	{ snaketongs::with ctx = proc["contextlib.suppress"](IndexError); try {
+		letters[42];
+	} catch(...) { ctx.exit(); } }
 });
 
 TEST("readme: func args", {

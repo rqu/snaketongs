@@ -707,6 +707,16 @@ public:
 		}));
 	}
 
+	object make_exception(std::exception_ptr exc_ptr) {
+		try {
+			std::rethrow_exception(exc_ptr);
+		} catch(const object &exc) {
+			return exc.dup();
+		} catch(...) {
+			return py_wrapped_cpp_exc(cmd_make_remote(exc_ptr));
+		}
+	}
+
 	// python builtins
 
 #define SNAKETONGS_BUILTIN(N) const object_ N = proc["builtins." #N]
@@ -1284,6 +1294,76 @@ private: // for use by .dup()
 	cpp_wrapped_py_exc(const checked_dtor_object &obj, const std::string &msg) : checked_dtor_object(obj.dup()), msg(msg) {}
 };
 
+struct object_guard : object {
+	// https://docs.python.org/3.11/reference/compound_stmts.html#with
+private:
+	bool released = false;
+	const int num_excs_on_enter = std::uncaught_exceptions();
+	const object manager, enter_fn, exit_fn;
+
+	static constexpr const std::string_view
+		msg_unknown_exc = "snaketongs::with destructor cannot retrieve the current exception, catch the exception manually and call .exit()",
+		msg_cannot_suppress = "snaketongs::with destructor cannot suppress exceptions, catch the exception manually and call .exit()";
+
+public:
+	object_guard(object &&context_manager) :
+		// temporarily use base class subobject for `type(context_manager)`
+		object(context_manager.type()),
+		// 1. expression is evaluated before this ctor is called
+		manager(FWD(context_manager)),
+		// 2. __enter__ is loaded
+		enter_fn(/*manager.type().*/get("__enter__")),
+		// 3. __exit__ is loaded
+		exit_fn(/*manager.type().*/manager.type().get("__exit__")) {
+		// reset base class subobject now before __enter__ is called (in case object.del() throws)
+		operator=(nullptr);
+		// 4. __enter__ is invoked (this may throw, then we should not call __exit__), 5. assign to target (will not throw in our case)
+		operator=(enter_fn(manager));
+		// 6. after ctor returns, statements are executed, 7. see .exit() and dtor
+	}
+
+	using object::operator=;
+
+	void exit() {
+		if(released)
+			std::terminate();
+		released = true;
+		process &proc = manager.get_process();
+		auto exc_ptr = std::current_exception();
+		if(!exc_ptr) {
+			exit_fn(manager, proc.None, proc.None, proc.None);
+		} else {
+			object exc = proc.make_exception(exc_ptr);
+			if(exit_fn(manager, exc.type(), exc, exc.get("__traceback__")))
+				return;
+			else
+				throw;
+		}
+	}
+
+	~object_guard() noexcept(false) {
+		if(released)
+			return;
+		process &proc = manager.get_process();
+		int num_excs_on_exit = std::uncaught_exceptions();
+		if(num_excs_on_enter == num_excs_on_exit) {
+			// no exception in `with` body, leaving normally, exceptions allowed
+			exit_fn(manager, proc.None, proc.None, proc.None);
+		} else {
+			// exception thrown in `with` body, pass it to exit, exceptions are caught and printed
+			try {
+				auto UnknownException = proc.type("UnknownException", proc.make_tuple(proc.BaseException), proc.dict());
+				if(exit_fn(manager, UnknownException, UnknownException(msg_unknown_exc), proc.None))
+					throw proc["builtins.NotImplementedError"](msg_cannot_suppress);
+			} catch(...) {
+				try {
+					proc["traceback.print_exception"](proc.make_exception(std::current_exception()));
+				} catch(...) {}
+			}
+		}
+	}
+};
+
 
 ////////////////////////////////////////////////
 //                                            //
@@ -1380,6 +1460,7 @@ namespace snaketongs {
 	using exception = detail::cpp_wrapped_py_exc;
 	using detail::io_error;
 	using detail::kw;
+	using with = detail::object_guard;
 }
 
 template<>

@@ -35,6 +35,7 @@ int main() {
 	// Imports:
 	auto copy = proc["shutil.copy"]; // from shutil import copy
 	auto re = proc["re.*"]; // import re
+	auto IndexError = proc["builtins.IndexError"]; // for builtins not recognized by snaketongs
 
 	// Builtins are exposed as members of `snaketongs::process`.
 	// Here we use Python's str, range, map, and sorted:
@@ -72,6 +73,19 @@ int main() {
 	// Iterating Python objects (same as Python for-loop):
 	for(auto &elem : squares)
 		std::cout << elem << std::endl;
+
+	// Simple with-statement (cannot suppress exceptions)
+	// - equivalent to  `with open("README.md") as file:  print(file.readline())`
+	{
+		snaketongs::with file = proc.open("README.md");
+		std::cout << file.call("readline") << std::endl;
+	}
+
+	// Full with-statement
+	// - equivalent to  `with contextlib.suppress(IndexError):  letters[42]`
+	{ snaketongs::with ctx = proc["contextlib.suppress"](IndexError); try {
+		letters[42];
+	} catch(...) { ctx.exit(); } }
 }
 ```
 
