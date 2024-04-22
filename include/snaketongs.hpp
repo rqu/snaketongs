@@ -138,6 +138,10 @@ struct io_error : std::runtime_error {
 	using std::runtime_error::runtime_error;
 };
 
+struct py_exc_during_init : io_error {
+	py_exc_during_init() : io_error("A Python exception was thrown during snaketongs::process initialization") {}
+};
+
 
 //////////////////////////////////////////
 //                                      //
@@ -334,6 +338,7 @@ class process_t : process_base {
 	>;
 	std::vector<py_to_cpp_ptr_t> py_to_cpp_ptrs;
 	free_list_entry py_to_cpp_ptrs_free_list;
+	bool initialized = false;
 
 	// (more data members at the end of the class)
 
@@ -399,6 +404,10 @@ class process_t : process_base {
 
 	[[noreturn]] void rethrow_exc(raw_object raw_exc_obj) {
 		object exc_obj = cook(raw_exc_obj);
+		if(!initialized) {
+			// cannot access python builtins yet => do not attempt to wrap/unwrap the exception
+			throw py_exc_during_init();
+		}
 		if(exc_obj.type().is(py_wrapped_cpp_exc)) {
 			// python wrapped cpp exception => unwrap
 			int_t ptr_idx = exc_obj.getattr("args").getitem(0).getattr("remote_idx").conv();
@@ -802,6 +811,8 @@ private:
 
 	// the first subobject to be destroyed, making all expired() lambdas return true
 	const std::shared_ptr<std::monostate> canary = std::make_shared<std::monostate>();
+
+	const bool dummy = initialized = true;
 };
 
 #undef object
