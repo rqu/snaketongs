@@ -45,7 +45,12 @@ enum {
 	ForkChild = 0,
 };
 
-static noinline noreturn void exec_python(int cpp_to_py, int py_to_cpp, int int_size) {
+static noinline noreturn void exec_python(const char *python, int cpp_to_py, int py_to_cpp, int int_size) {
+	if(!python || !*python)
+		python = getenv("PYTHON");
+	if(!python || !*python)
+		python = "python3";
+
 	char cpp_to_py_decimal[3 * sizeof cpp_to_py];
 	char py_to_cpp_decimal[3 * sizeof py_to_cpp];
 	char int_size_decimal[3 * sizeof int_size];
@@ -54,7 +59,7 @@ static noinline noreturn void exec_python(int cpp_to_py, int py_to_cpp, int int_
 	sprintf(py_to_cpp_decimal, "%i", py_to_cpp);
 	sprintf(int_size_decimal, "%i", int_size);
 
-	execlp("python3", "python3", "-c", python_script, cpp_to_py_decimal, py_to_cpp_decimal, int_size_decimal, NULL);
+	execlp(python, python, "-c", python_script, cpp_to_py_decimal, py_to_cpp_decimal, int_size_decimal, NULL);
 	perror("Cannot execute Python interpreter");
 	exit(127);
 }
@@ -78,7 +83,7 @@ static bool wait_for_python(pid_t pid) {
 	}
 }
 
-struct snaketongs_impl *snaketongs_impl_start(int int_size) {
+struct snaketongs_impl *snaketongs_impl_start(const char *python, int int_size) {
 	struct snaketongs_impl *self = (struct snaketongs_impl *) malloc(sizeof *self);
 	if(!self) {
 		// avoid using stdio in case of oom
@@ -99,7 +104,7 @@ struct snaketongs_impl *snaketongs_impl_start(int int_size) {
 		case ForkChild:
 			if(close(cpp_to_py[WriteEnd]) | close(py_to_cpp[ReadEnd]))
 				perror("snaketongs_impl_start: close"), _exit(127);
-			exec_python(cpp_to_py[ReadEnd], py_to_cpp[WriteEnd], int_size);
+			exec_python(python, cpp_to_py[ReadEnd], py_to_cpp[WriteEnd], int_size);
 			// noreturn
 		case ForkError:
 			perror("snaketongs_impl_start: fork");

@@ -10,7 +10,7 @@ extern "C" {
 
 struct snaketongs_impl;
 
-struct snaketongs_impl *snaketongs_impl_start(int int_size);
+struct snaketongs_impl *snaketongs_impl_start(const char *python, int int_size);
 bool snaketongs_impl_send(struct snaketongs_impl *self, const void *src, size_t size);
 bool snaketongs_impl_flush(struct snaketongs_impl *self);
 bool snaketongs_impl_recv(struct snaketongs_impl *self, void *dest, size_t size);

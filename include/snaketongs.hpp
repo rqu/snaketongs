@@ -274,11 +274,12 @@ class process_base {
 	struct snaketongs_impl *impl;
 
 public:
-	process_base() {
-		impl = snaketongs_impl_start(int_size);
+	explicit process_base(const char *python) {
+		impl = snaketongs_impl_start(python, int_size);
 		if(!impl)
 			throw io_error("Cannot start subprocess");
 	}
+	process_base() : process_base(nullptr) {}
 	process_base(const process_base &) = delete;
 	void operator=(const process_base &) = delete;
 
@@ -587,6 +588,8 @@ class process_t : process_base {
 
 public:
 	// process management
+
+	using process_base::process_base;
 
 	void terminate() {
 		cmd_ret_from_main_loop();
@@ -1477,7 +1480,7 @@ public:
 ////////////////////////////////
 
 namespace snaketongs {
-	struct process : detail::process {};
+	struct process : detail::process { using detail::process::process; };
 	using detail::object;
 	using exception = detail::cpp_wrapped_py_exc;
 	using detail::io_error;

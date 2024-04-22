@@ -344,6 +344,28 @@ In addition to the usual language and standard library UB, snaketongs also reser
 - using snaketongs from multiple C++ threads, from signal handlers, from multiple Python threads, or from Python destructors/finalizers
 
 
+## Python interpreter path
+
+The Python interpreter command defaults to `python3`.
+It can also be specified explicitly at runtime by setting the `PYTHON` environment variable,
+or at compile-time by passing a C string argument to the `snaketongs::process` constructor. For example:
+
+```cpp
+snaketongs::process proc("python3.11");
+snaketongs::process proc("/path/to/venv/bin/python");
+snaketongs::process proc(std::getenv("MY_PYTHON"));
+snaketongs::process proc(CONFIG_MY_PYTHON);
+```
+
+More precisely:
+
+- if the constructor argument is present and non-null and non-empty, it is used (without any fallback)
+- otherwise, if the environment variable is present and non-empty, it is used (without any fallback)
+- otherwise, the default `python3` is used
+
+In any case, the string can be either a `$PATH` command name without slash (`/`) or an absolute/relative filename with at least one slash (`/`).
+
+
 ## Comparison with embedding
 
 Embedding means running the entire interpreter as a library, as opposed to executing it as a standalone program.
