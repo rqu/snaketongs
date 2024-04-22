@@ -570,6 +570,17 @@ class process_t : process_base {
 		return {object(this, obj)};
 	}
 
+	// utility
+
+	object import_or_none(std::string_view qualname) {
+		try {
+			return proc[qualname];
+		} catch(const py_exc_during_init &) {
+			// assuming attribute error
+			return None.dup();
+		}
+	}
+
 	friend object;
 	template<typename F, std::size_t MaxArity>
 	friend class functor_wrapper;
@@ -728,7 +739,7 @@ public:
 
 	// python builtins
 
-#define SNAKETONGS_BUILTIN(N) const object_ N = proc["builtins." #N]
+#define SNAKETONGS_BUILTIN(N) const object_ N = import_or_none("builtins." #N)
 #define SNAKETONGS_BUILTINS(A, B, C, D, E, F, G, H) \
 	SNAKETONGS_BUILTIN(A); SNAKETONGS_BUILTIN(B); SNAKETONGS_BUILTIN(C); SNAKETONGS_BUILTIN(D); \
 	SNAKETONGS_BUILTIN(E); SNAKETONGS_BUILTIN(F); SNAKETONGS_BUILTIN(G); SNAKETONGS_BUILTIN(H)
@@ -784,7 +795,7 @@ public:
 	const object op_lshift = proc["operator.lshift"];
 	const object op_mod = proc["operator.mod"];
 	const object op_mul = proc["operator.mul"];
-	const object op_matmul = proc["operator.matmul"]; // non-operator
+	const object op_matmul = import_or_none("operator.matmul"); // non-operator
 	const object op_or = proc["operator.or_"];
 	const object op_pow = proc["operator.pow"]; // non-operator, hacked as a * *b
 	const object op_rshift = proc["operator.rshift"];
@@ -798,7 +809,7 @@ public:
 	const object op_ilshift = proc["operator.ilshift"];
 	const object op_imod = proc["operator.imod"];
 	const object op_imul = proc["operator.imul"];
-	const object op_imatmul = proc["operator.imatmul"]; // non-operator
+	const object op_imatmul = import_or_none("operator.imatmul"); // non-operator
 	const object op_ior = proc["operator.ior"];
 	const object op_ipow = proc["operator.ipow"]; // non-operator, hacked as a * *b
 	const object op_irshift = proc["operator.irshift"];

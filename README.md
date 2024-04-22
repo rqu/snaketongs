@@ -5,6 +5,13 @@ Internally, it runs a Python interpreter as a subprocess of your C++ program, co
 See below for a [comparison with embedding](#comparison-with-embedding), the official way of using Python from C++.
 
 
+## Prerequisites
+
+- UNIX-like system
+- C++ compiler supporting C++20 or later
+- Python 3.7.0 or later
+
+
 ## Setup
 
 snaketongs consists of two parts: `snaketongs.hpp` (a header file to be included) and `subproc.o` (an object file to be linked against).
@@ -356,3 +363,18 @@ Practically speaking, either solution has its advantages and disadvantages:
   - Note that no isolation is currently supported by snagetongs itself.
     Replacing the `python` binary with a wrapper that drops privileges and/or closes itself in a container would not be hard, though.
     (Theoretically, `python` could even be replaced with a script that runs a full-blown virtual machine and the actual interpreter inside it.)
+
+
+## Compatibility
+
+**Operating system:** Standard C++ currently does not offer a portable way to start a subprocess and communicate with it.
+As such, snaketongs uses unix library functions (standardized by POSIX.1‐2001 and later standards), such as `pipe`, `fdopen`, `fork`, `execlp`, `waitid`.
+This platform-specific code is separated into `subproc.c` and could be reimplemented for other platforms.
+
+**C++ language and library:** snaketongs depends heavily on C++20 features, especially concepts and auto parameters.
+Adding C++17 support would be non-trivial and is not planned.
+
+**Python language and library:** snaketongs uses `queue.SimpleQueue` (added in Python 3.7, released 2018).
+As such, versions up to 3.6.x (end-of-life 2018) are not supported by snaketongs. Support for versions as old as 3.2 can be added by modifying `entry.py`:
+- replace `SimpleQueue` with `Queue` and disable garbage collection while dequeuing in `process_queue()`
+- remove the underscore (`_`) in the last line
