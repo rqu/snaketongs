@@ -197,7 +197,12 @@ def loop():
 
 def read(n):
 	b = cpp_to_py.read(n)
-	assert len(b) == n
+	if len(b) != n:
+		# short read, parent probably exited without cleanup,
+		# probably printing a message, so don't pollute the stderr
+		# (also don't throw SystemExit by calling os.exit)
+		import os
+		os._exit(125)
 	return b
 
 def read_int():
