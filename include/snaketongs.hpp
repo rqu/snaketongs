@@ -628,6 +628,10 @@ public:
 	object into_object(int_t value) {
 		return cmd_make_int(value);
 	}
+	template<auto V>
+	object into_object(std::integral_constant<decltype(V), V>) {
+		return cmd_make_int(V);
+	}
 
 	object into_object(std::floating_point auto value) {
 		if constexpr(std::same_as<decltype(value), double>) {
